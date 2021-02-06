@@ -112,6 +112,7 @@ export default function getAppSyncConfig(context, appSyncConfig) {
           invoke: async (payload) => {
             if (context.serverless.service.provider.runtime == 'go1.x') {
               const result = await axios.request({
+                // TODO: Get offline url from context
                 url: `http://localhost:3002/2015-03-31/functions/${func.name}/invocations`,
                 method: 'POST',
                 data: payload,
