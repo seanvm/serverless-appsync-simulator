@@ -1,5 +1,5 @@
 import { AmplifyAppSyncSimulatorAuthenticationType as AuthTypes } from 'amplify-appsync-simulator';
-import { invoke } from 'amplify-nodejs-function-runtime-provider/lib/utils/invoke';
+import { invoke as invokeNodejs } from 'amplify-nodejs-function-runtime-provider/lib/utils/invoke';
 import axios from 'axios';
 import fs from 'fs';
 import { forEach, isNil, first } from 'lodash';
@@ -92,6 +92,7 @@ export default function getAppSyncConfig(context, appSyncConfig) {
                 method: func.method,
                 data: payload,
                 validateStatus: false,
+                headers: payload.request.headers,
               });
               return result.data;
             },
@@ -108,22 +109,35 @@ export default function getAppSyncConfig(context, appSyncConfig) {
 
         return {
           ...dataSource,
-          invoke: (payload) =>
-            invoke({
-              packageFolder: path.join(
-                context.serverless.config.servicePath,
-                context.options.location,
-              ),
-              handler: func.handler,
-              event: JSON.stringify(payload),
-              environment: {
-                ...(context.options.lambda.loadLocalEnv === true
-                  ? process.env
-                  : {}),
-                ...context.serverless.service.provider.environment,
-                ...func.environment,
-              },
-            }),
+          invoke: async (payload) => {
+            if (context.serverless.service.provider.runtime == 'go1.x') {
+              const result = await axios.request({
+                // TODO: Get offline url from context
+                url: `http://localhost:3002/2015-03-31/functions/${func.name}/invocations`,
+                method: 'POST',
+                data: payload,
+                validateStatus: false,
+                headers: payload.request.headers,
+              });
+              return result.data;
+            } else {
+              invokeNodejs({
+                packageFolder: path.join(
+                  context.serverless.config.servicePath,
+                  context.options.location,
+                ),
+                handler: func.handler,
+                event: JSON.stringify(payload),
+                environment: {
+                  ...(context.options.lambda.loadLocalEnv === true
+                    ? process.env
+                    : {}),
+                  ...context.serverless.service.provider.environment,
+                  ...func.environment,
+                },
+              });
+            }
+          },
         };
       }
       case 'AMAZON_ELASTICSEARCH':
